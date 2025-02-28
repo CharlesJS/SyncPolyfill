@@ -1,5 +1,5 @@
 #if !canImport(Darwin)
-import Synchronization
+@_exported import struct Synchronization.Mutex
 typealias Mutex = Synchronization.Mutex
 #else
 import Darwin
