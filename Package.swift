@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.4
 
 import PackageDescription
 
@@ -10,9 +10,19 @@ let package = Package(
             targets: ["SyncPolyfill"]
         ),
     ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-atomics", from: "1.3.1"),
+    ],
     targets: [
         .target(
-            name: "SyncPolyfill"
+            name: "SyncPolyfill",
+            dependencies: [
+                .product(
+                    name: "Atomics",
+                    package: "swift-atomics",
+                    condition: .when(platforms: [.macOS, .macCatalyst, .iOS, .tvOS, .visionOS, .watchOS])
+                ),
+            ]
         ),
         .testTarget(
             name: "SyncPolyfillTests",
