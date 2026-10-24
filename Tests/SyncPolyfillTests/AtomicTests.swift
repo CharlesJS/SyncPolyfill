@@ -35,9 +35,19 @@ private func strongCompareExchange(
     case (.acquiring, .relaxed):
         a.compareExchange(expected: expected, desired: desired, successOrdering: .acquiring, failureOrdering: .relaxed)
     case (.acquiring, .sequentiallyConsistent):
-        a.compareExchange(expected: expected, desired: desired, successOrdering: .acquiring, failureOrdering: .sequentiallyConsistent)
+        a.compareExchange(
+            expected: expected,
+            desired: desired,
+            successOrdering: .acquiring,
+            failureOrdering: .sequentiallyConsistent
+        )
     case (.acquiringAndReleasing, .acquiring):
-        a.compareExchange(expected: expected, desired: desired, successOrdering: .acquiringAndReleasing, failureOrdering: .acquiring)
+        a.compareExchange(
+            expected: expected,
+            desired: desired,
+            successOrdering: .acquiringAndReleasing,
+            failureOrdering: .acquiring
+        )
     case (.acquiringAndReleasing, .relaxed):
         a.compareExchange(
             expected: expected,
