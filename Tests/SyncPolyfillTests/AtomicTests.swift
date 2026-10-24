@@ -35,9 +35,19 @@ private func strongCompareExchange(
     case (.acquiring, .relaxed):
         a.compareExchange(expected: expected, desired: desired, successOrdering: .acquiring, failureOrdering: .relaxed)
     case (.acquiring, .sequentiallyConsistent):
-        a.compareExchange(expected: expected, desired: desired, successOrdering: .acquiring, failureOrdering: .sequentiallyConsistent)
+        a.compareExchange(
+            expected: expected,
+            desired: desired,
+            successOrdering: .acquiring,
+            failureOrdering: .sequentiallyConsistent
+        )
     case (.acquiringAndReleasing, .acquiring):
-        a.compareExchange(expected: expected, desired: desired, successOrdering: .acquiringAndReleasing, failureOrdering: .acquiring)
+        a.compareExchange(
+            expected: expected,
+            desired: desired,
+            successOrdering: .acquiringAndReleasing,
+            failureOrdering: .acquiring
+        )
     case (.acquiringAndReleasing, .relaxed):
         a.compareExchange(
             expected: expected,
@@ -907,6 +917,112 @@ struct ConcurrencyTests {
                     #expect(payload.value == 42)
                 }
             }
+        }
+    }
+}
+
+// Atomic's operations are only available for concrete storage sizes, so generic
+// code can name and construct an optional atomic but not operate on it.
+private func makeOptionalSlot<T: AtomicOptionalRepresentable>(_: T.Type) -> Atomic<T?> {
+    Atomic<T?>(nil)
+}
+
+@Suite("Atomic optional tests")
+struct OptionalTests {
+    final class Box {}
+
+    @Test
+    func rawPointer() {
+        let p = UnsafeMutableRawPointer.allocate(byteCount: 8, alignment: 8)
+        defer { p.deallocate() }
+
+        let a = Atomic<UnsafeMutableRawPointer?>(nil)
+        #expect(a.load(ordering: .relaxed) == nil)
+
+        a.store(p, ordering: .relaxed)
+        #expect(a.load(ordering: .relaxed) == p)
+
+        #expect(a.exchange(nil, ordering: .relaxed) == p)
+        #expect(a.load(ordering: .relaxed) == nil)
+
+        let hit = a.compareExchange(expected: nil, desired: p, ordering: .sequentiallyConsistent)
+        #expect(hit.exchanged && hit.original == nil)
+
+        let miss = a.compareExchange(expected: nil, desired: nil, ordering: .sequentiallyConsistent)
+        #expect(!miss.exchanged && miss.original == p)
+        #expect(a.load(ordering: .relaxed) == p)
+
+        var weak: (exchanged: Bool, original: UnsafeMutableRawPointer?)
+        repeat {
+            weak = a.weakCompareExchange(expected: p, desired: nil, ordering: .relaxed)
+        } while !weak.exchanged
+        #expect(weak.original == p)
+        #expect(a.load(ordering: .relaxed) == nil)
+    }
+
+    @Test
+    func immutableRawPointer() {
+        let p = UnsafeMutableRawPointer.allocate(byteCount: 8, alignment: 8)
+        defer { p.deallocate() }
+
+        let a = Atomic<UnsafeRawPointer?>(UnsafeRawPointer(p))
+        #expect(a.exchange(nil, ordering: .relaxed) == UnsafeRawPointer(p))
+        #expect(a.load(ordering: .relaxed) == nil)
+    }
+
+    @Test
+    func typedPointers() {
+        let p = UnsafeMutablePointer<Int>.allocate(capacity: 1)
+        defer { p.deallocate() }
+
+        let m = Atomic<UnsafeMutablePointer<Int>?>(nil)
+        #expect(m.compareExchange(expected: nil, desired: p, ordering: .relaxed).exchanged)
+        #expect(m.load(ordering: .relaxed) == p)
+
+        let i = Atomic<UnsafePointer<Int>?>(UnsafePointer(p))
+        #expect(i.exchange(nil, ordering: .relaxed) == UnsafePointer(p))
+        #expect(i.load(ordering: .relaxed) == nil)
+    }
+
+    // Unmanaged isn't Equatable, so compare through its opaque pointer.
+    @Test
+    func unmanaged() {
+        let box = Box()
+        withExtendedLifetime(box) {
+            let u = Unmanaged.passUnretained(box)
+            let a = Atomic<Unmanaged<Box>?>(nil)
+            #expect(a.load(ordering: .relaxed) == nil)
+
+            a.store(u, ordering: .relaxed)
+            #expect(a.load(ordering: .relaxed)?.toOpaque() == u.toOpaque())
+            #expect(a.exchange(nil, ordering: .relaxed)?.toOpaque() == u.toOpaque())
+            #expect(a.load(ordering: .relaxed) == nil)
+        }
+    }
+
+    @Test
+    func genericConstruction() {
+        let a = makeOptionalSlot(UnsafeRawPointer.self)
+        #expect(a.load(ordering: .relaxed) == nil)
+    }
+
+    // Lazy-init pattern: exactly one thread may install a value into a nil slot.
+    @Test
+    func compareExchangeFromNilHasSingleWinner() {
+        let box = Box()
+        withExtendedLifetime(box) {
+            // None of the optional-representable types are Sendable, but sharing
+            // them through the atomic is exactly what's under test.
+            nonisolated(unsafe) let u = Unmanaged.passUnretained(box)
+            nonisolated(unsafe) let slot = Atomic<Unmanaged<Box>?>(nil)
+            let winners = Atomic(0)
+            DispatchQueue.concurrentPerform(iterations: ConcurrencyTests.threads) { _ in
+                if slot.compareExchange(expected: nil, desired: u, ordering: .acquiringAndReleasing).exchanged {
+                    winners.wrappingAdd(1, ordering: .relaxed)
+                }
+            }
+            #expect(winners.load(ordering: .relaxed) == 1)
+            #expect(slot.load(ordering: .relaxed)?.toOpaque() == u.toOpaque())
         }
     }
 }

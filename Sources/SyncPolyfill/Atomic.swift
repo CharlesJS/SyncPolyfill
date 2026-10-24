@@ -1,6 +1,12 @@
 #if !canImport(Darwin)
 @_exported import struct Synchronization.Atomic
 typealias Atomic = Synchronization.Atomic
+
+@_exported import protocol Synchronization.AtomicRepresentable
+typealias AtomicRepresentable = Synchronization.AtomicRepresentable
+
+@_exported import protocol Synchronization.AtomicOptionalRepresentable
+typealias AtomicOptionalRepresentable = Synchronization.AtomicOptionalRepresentable
 #else
 import Atomics
 
@@ -25,6 +31,7 @@ public enum AtomicUpdateOrdering {
 }
 
 public typealias AtomicRepresentable = AtomicValue
+public typealias AtomicOptionalRepresentable = AtomicOptionalWrappable
 
 public struct Atomic<Value: AtomicRepresentable>: ~Copyable where Value.AtomicRepresentation.Value == Value {
     public let storage: UnsafeAtomic<Value>
