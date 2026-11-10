@@ -30,7 +30,9 @@ public enum AtomicUpdateOrdering {
     case sequentiallyConsistent
 }
 
+@_exported import protocol Atomics.AtomicValue
 public typealias AtomicRepresentable = AtomicValue
+@_exported import protocol Atomics.AtomicOptionalWrappable
 public typealias AtomicOptionalRepresentable = AtomicOptionalWrappable
 
 public struct Atomic<Value: AtomicRepresentable>: ~Copyable where Value.AtomicRepresentation.Value == Value {
